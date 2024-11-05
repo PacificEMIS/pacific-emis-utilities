@@ -1,0 +1,6 @@
+{
+    "base_url": "https://localhost:44301",
+    "username": "example@pacific-emis.org",
+    "password": "yourpassword",
+    "output_directory": "C:\\folder\\to\\output\\files\\"
+}
