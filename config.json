@@ -2,5 +2,6 @@
     "base_url": "https://localhost:44301",
     "username": "example@pacific-emis.org",
     "password": "yourpassword",
-    "output_directory": "C:\\folder\\to\\output\\files\\"
+    "output_directory": "C:\\folder\\to\\output\\files\\",
+    "un_pop_division_api_token": "your-provided-bearer-token"
 }
