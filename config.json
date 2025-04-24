@@ -3,5 +3,6 @@
     "username": "example@pacific-emis.org",
     "password": "yourpassword",
     "output_directory": "C:\\folder\\to\\output\\files\\",
+    "cpd_directory": "C:\\folder\\to\\CPD\\data\\",
     "un_pop_division_api_token": "your-provided-bearer-token"
 }
