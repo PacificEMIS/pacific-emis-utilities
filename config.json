@@ -1,4 +1,10 @@
 {
+    "sqlserver_name": "SERVER\\SQLEXPRESS",
+    "sqlserver_db": "PACIFICEMISDB",
+    "sqlserver_ip": "localhost",
+    "sqlserver_port": "1433",
+    "sqlserver_user": "sa",
+    "sqlserver_pwd": "password",
     "base_url": "https://localhost:44301",
     "username": "example@pacific-emis.org",
     "password": "yourpassword",
