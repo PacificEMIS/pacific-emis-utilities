@@ -52,6 +52,13 @@ for i, row in enumerate(cursor):
         break
     print(row)
 
+# 📌 Consume remaining results so connection is clean
+while cursor.nextset():
+    pass
+
+cursor.close()
+
+
 # %%
 # Find excel workbook to load
 import os
@@ -68,11 +75,10 @@ def find_sample_files(directory, skip_prefix="CPD-source-data-workbook", extensi
 # Load sample files
 sample_files = find_sample_files(cpd_directory)
 
-print(f"Found {len(sample_files)} sample files to upload:")
-for f in sample_files:
-    print("-", os.path.basename(f))
+#print(f"Found {len(sample_files)} sample files to upload:")
+#for f in sample_files:
+#    print("-", os.path.basename(f))
 
-# %%
 # Load all excel workbook in memory.
 import openpyxl
 
@@ -178,11 +184,8 @@ def workbook_to_xml(wb):
 somefile = next(iter(all_workbooks.keys()))
 print(workbook_to_xml(all_workbooks[somefile]))
 
-# %%
-# Code to process the Excel workbook into XML data ready for SQL server stored proc
-import uuid
-import pyodbc
 
+# %%
 def extract_cpd_metadata(wb):
     """Extract CPD Name and CPD Year from the workbook."""
     # Access the 'CPD data' sheet
@@ -206,6 +209,11 @@ def extract_cpd_metadata(wb):
 
     return cpd_name, cpd_year
 
+
+# %%
+# Code to process the Excel workbook into XML data ready for SQL server stored proc
+import uuid
+import pyodbc
 import base64
 
 def load_single_workbook_to_sql(file_path, sql_conn):
@@ -250,7 +258,7 @@ def load_single_workbook_to_sql(file_path, sql_conn):
 
 # %%
 # Try loading a single workbook in DB
-somefile = list(all_workbooks.keys())[1] # change index to load load different one
+somefile = list(all_workbooks.keys())[3] # change index to load load different one
 print(f"Loading file: {os.path.basename(somefile)}")
 
 # Run the loader
