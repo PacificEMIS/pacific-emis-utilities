@@ -22,11 +22,11 @@ def load_config(config_path="config.json"):
     """Load configuration from a JSON file."""
     with open(config_path, 'r') as file:
         config = json.load(file)
-    return config["sqlserver_name"], config["sqlserver_db"], config["sqlserver_ip"], config["sqlserver_port"], config["sqlserver_user"], config["sqlserver_pwd"], config['base_url'], config['username'], config['password'], config['output_directory'], config['cpd_directory']
+    return config["sqlserver_name"], config["sqlserver_db"], config["sqlserver_ip"], config["sqlserver_port"], config["sqlserver_user"], config["sqlserver_pwd"], config['base_url'], config['username'], config['password'], config['output_directory'], config['pd_directory']
     
 
 # Test loading configuration
-sqlserver_name, sqlserver_db, sqlserver_ip, sqlserver_port, sqlserver_user, sqlserver_pwd, base_url, username, password, output_dir, cpd_directory = load_config()
+sqlserver_name, sqlserver_db, sqlserver_ip, sqlserver_port, sqlserver_user, sqlserver_pwd, base_url, username, password, output_dir, pd_directory = load_config()
 print("Configuration loaded successfully.")
 
 # %%
@@ -34,15 +34,22 @@ print("Configuration loaded successfully.")
 import pyodbc
 from sqlalchemy import create_engine
 
-conn = """
-    Driver={{ODBC Driver 17 for SQL Server}};
-    Server={},{};
-    Database={};
-    authentication=SqlPassword;UID={};PWD={};
-    TrustServerCertificate=yes;
-    """.format(sqlserver_ip, sqlserver_port, sqlserver_db, sqlserver_user, sqlserver_pwd)
+def odbc_escape(value: str) -> str:
+    # Wrap in braces and double any closing brace to escape it
+    return "{" + value.replace("}", "}}") + "}"
 
-sql_conn = pyodbc.connect(conn, autocommit=False)
+server = f"{sqlserver_ip},{sqlserver_port}"
+conn_str = (
+    "Driver={ODBC Driver 17 for SQL Server};"
+    f"Server={odbc_escape(server)};"
+    f"Database={odbc_escape(sqlserver_db)};"
+    f"UID={odbc_escape(sqlserver_user)};"
+    f"PWD={odbc_escape(sqlserver_pwd)};"
+    "Encrypt=yes;"
+    "TrustServerCertificate=yes;"
+)
+
+sql_conn = pyodbc.connect(conn_str, autocommit=False)
 
 cursor = sql_conn.cursor()
 cursor.execute('SELECT schNo, schName FROM Schools')
@@ -63,8 +70,8 @@ cursor.close()
 # Find excel workbook to load
 import os
 
-# Find CPD sample files to upload, skipping unwanted ones
-def find_sample_files(directory, skip_prefix="CPD-source-data-workbook", extension=".xlsx"):
+# Find PD sample files to upload, skipping unwanted ones
+def find_sample_files(directory, skip_prefix="PD-source-data-workbook", extension=".xlsx"):
     """Scan directory and list files NOT starting with skip_prefix, matching extension."""
     files = []
     for filename in os.listdir(directory):
@@ -73,7 +80,7 @@ def find_sample_files(directory, skip_prefix="CPD-source-data-workbook", extensi
     return files
 
 # Load sample files
-sample_files = find_sample_files(cpd_directory)
+sample_files = find_sample_files(pd_directory)
 
 #print(f"Found {len(sample_files)} sample files to upload:")
 #for f in sample_files:
@@ -105,7 +112,7 @@ print(f"\nTotal workbooks loaded: {len(all_workbooks)}")
 import xml.etree.ElementTree as ET
 
 def workbook_to_xml(wb):
-    ws = wb["CPD data"]  # your sheet is called exactly "CPD data"
+    ws = wb["PD data"]  # your sheet is called exactly "PD data"
 
     # Build a list of column headers
     headers = []
@@ -117,13 +124,13 @@ def workbook_to_xml(wb):
 
     # Column mapping (your provided one)
     column_mapping = {
-        "CPD Name": "CPDName",
-        "CPD Format": "CPDFormat",
-        "CPD Focus": "CPDFocus",
+        "PD Name": "PDName",
+        "PD Format": "PDFormat",
+        "PD Focus": "PDFocus",
         "Location": "Location",
         "Year": "Year",
-        "Start Date (YYY-MM-DD)": "StartDate",
-        "End Date (YYY-MM-DD)": "EndDate",
+        "Start Date (YYYY-MM-DD)": "StartDate",
+        "End Date (YYYY-MM-DD)": "EndDate",
         "Duration in Days": "DurationDays",
         "Duration in Hours": "DurationHours",
         "Teacher PF Number": "TeacherPFNumber",
@@ -132,10 +139,13 @@ def workbook_to_xml(wb):
         "Gender": "Gender",
         "Disability": "Disability",
         "Approximate Years Teaching": "ApproximateYearsTeaching",
-        "Attendance Rate": "AttendanceRate",
         "80% Attendance": "Percent80Attendance",
         "Statement of Completion": "StatementCompletion",
-        "School": "School"
+        "School": "School",
+        "Total Teachers in School": "TotalTeachersInSchool",
+        "Teachers Attending from School": "TeachersAttendingFromSchool",
+        "Attendance Rate": "AttendanceRate"
+
     }
     # Add attended day columns dynamically
     for i in range(1, 16):
@@ -145,11 +155,12 @@ def workbook_to_xml(wb):
     root = ET.Element("ListObject")
     root.set("FirstRow", "2")
 
-    # Set cpdName and cpdYear attributes
+    # Set pdName and pdYear attributes
     first_data_row = list(ws.iter_rows(min_row=2, max_row=2, values_only=True))[0]
     header_to_index = {h: i for i, h in enumerate(headers)}
-    root.set("cpdName", str(first_data_row[header_to_index["CPD Name"]]))
-    root.set("cpdYear", str(int(first_data_row[header_to_index["Year"]])))
+    root.set("pdName", str(first_data_row[header_to_index["PD Name"]]))
+    start_date = first_data_row[header_to_index["Start Date (YYYY-MM-DD)"]]
+    root.set("pdStartDate", start_date.strftime("%Y-%m-%d"))
 
     # Build rows
     for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
@@ -164,7 +175,7 @@ def workbook_to_xml(wb):
             
             xml_attr = column_mapping.get(header)
             if xml_attr:
-                if header in ["Start Date (YYY-MM-DD)", "End Date (YYY-MM-DD)"]:
+                if header in ["Start Date (YYYY-MM-DD)", "End Date (YYYY-MM-DD)"]:
                     if cell_value is not None:
                         # Convert dates to Excel serial number
                         val = (cell_value - datetime(1899, 12, 30)).days
@@ -180,16 +191,35 @@ def workbook_to_xml(wb):
 
 
 # %%
-# Print out one generated XML
+# Print out one generated XML, formatted nicely
 somefile = next(iter(all_workbooks.keys()))
-print(workbook_to_xml(all_workbooks[somefile]))
+raw_xml = workbook_to_xml(all_workbooks[somefile])
+
+# Insert newline before each <row Index=
+formatted_xml = raw_xml.replace('<row Index=', '\n<row Index=')
+
+print(formatted_xml)
 
 
 # %%
-def extract_cpd_metadata(wb):
-    """Extract CPD Name and CPD Year from the workbook."""
-    # Access the 'CPD data' sheet
-    ws = wb["CPD data"]
+# Get all lookups from EMIS. This depends on notebook lookups.ipynb which needs to run at least once
+# to pickle the data locally.
+import os
+import pickle
+
+cache_dir = "cached-data"
+
+with open(os.path.join(cache_dir, "lookups_data.pkl"), "rb") as f:
+    lookups = pickle.load(f)
+
+print(f"Loaded {len(lookups)} lookup from cache.")
+
+
+# %%
+def extract_pd_metadata(wb):
+    """Extract PD Name and PD Year from the workbook."""
+    # Access the 'PD data' sheet
+    ws = wb["PD data"]
 
     # Read the first data row (row 2)
     first_row = [cell.value for cell in ws[2]]
@@ -200,14 +230,20 @@ def extract_cpd_metadata(wb):
     # Create dictionary of {column name -> value}
     row_dict = dict(zip(headers, first_row))
 
-    # Extract CPD Name and Year
-    cpd_name = row_dict.get("CPD Name", "")
-    cpd_year = row_dict.get("Year", "")
+    # Extract PD Name and Year
+    pd_name = row_dict.get("PD Name", "")
+    pd_start_date = row_dict.get("Start Date (YYYY-MM-DD)", "")
 
-    if not cpd_name or not cpd_year:
-        raise ValueError(f"Missing CPD Name or Year in workbook {wb.properties.title}.")
+    # Get the PD Code from lookups_data
+    pd_code = next((item['C'] for item in lookups['teacherPdTypes'] if item['N'] == pd_name), None)
 
-    return cpd_name, cpd_year
+    if pd_code is None:
+        raise ValueError(f"PD Name '{pd_name}' not found in lookup lkpTeacherPdTypes in workbook {wb.properties.title}.")
+        
+    if not pd_name or not pd_start_date:
+        raise ValueError(f"Missing PD Name or Start Date in workbook {wb.properties.title}.")
+
+    return pd_name, pd_code, pd_start_date
 
 
 # %%
@@ -220,10 +256,9 @@ def load_single_workbook_to_sql(file_path, sql_conn):
     wb = all_workbooks[file_path]
     xml_data = workbook_to_xml(wb)
     
-    cpd_name, cpd_year = extract_cpd_metadata(wb)
+    pd_name, pd_code, pd_start_date = extract_pd_metadata(wb)
     file_reference = str(uuid.uuid4())
     username = "ghachey@purltek.com"
-    cpd_code = cpd_name
 
     # Encode XML
     xml_base64 = base64.b64encode(xml_data.encode('utf-8')).decode('ascii')
@@ -235,12 +270,12 @@ def load_single_workbook_to_sql(file_path, sql_conn):
     SET @bin = CAST(CAST('{xml_base64}' AS XML).value('.', 'VARBINARY(MAX)') AS VARBINARY(MAX));
     SET @p1 = CONVERT(XML, @bin);
 
-    EXEC pTeacherWrite.LoadTeacherCpd 
-        @cpdData = @p1, 
+    EXEC pTeacherWrite.LoadTeacherPd 
+        @pdData = @p1, 
         @fileReference = '{file_reference}',
         @user = '{username}',
-        @cpdCode = '{cpd_code}',
-        @cpdYear = {cpd_year};
+        @pdCode = '{pd_code}',
+        @pdStartDate = '{pd_start_date}';
     """
 
     cursor = sql_conn.cursor()
