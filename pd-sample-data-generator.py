@@ -203,13 +203,11 @@ display(df.head())
 # %%
 # Clear old data and write new data to workbook.
 start_cell = "A2"
-data_range = ws.range(start_cell).expand("table")
-data_range.clear_contents()
-
-# Write the DataFrame values (without header)
+ws.range(start_cell).expand("table").clear_contents()
 ws.range(start_cell).value = df.values.tolist()
 
 # Save and close
+print(f"Saving {output_path}...")
 wb.save(output_path)
 wb.close()
 
@@ -243,7 +241,7 @@ try:
             ws.range(start_cell).value = df.values.tolist()
     
             # Save workbook
-            safe_pd_name = pd_type.replace(" ", "_").replace("/", "_")
+            safe_pd_name = pd_type.replace(" ", "-").replace("/", "-").replace(":", "-")
             filename = f"PD-{safe_pd_name}-{year}.xlsx"
             save_path = os.path.join(pd_directory, filename)
             print(f"Saving {save_path}...")
